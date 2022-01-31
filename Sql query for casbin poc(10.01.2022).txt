@@ -1,0 +1,114 @@
+CREATE USER User1 WITHOUT LOGIN;  
+CREATE USER User2 WITHOUT LOGIN;   
+GO
+
+GRANT SELECT ON dbo.Contacts TO User1; 
+GRANT INSERT ON dbo.Contacts TO User1;
+GRANT UPDATE ON dbo.Contacts TO User1;
+
+GRANT SELECT ON dbo.Contacts TO User2;
+GRANT DELETE ON dbo.Contacts TO User2;
+GRANT UPDATE ON dbo.Contacts TO User2;
+GO
+
+
+INSERT INTO [dbo].[CasbinRule]
+           ([PType]
+           ,[V0]
+           ,[V1]
+           ,[V2]
+           ,[V3]
+           ,[V4])
+     VALUES
+           ('p','Role','UserAffiliation','SecurityContext','ReadPrivilege', 'Read'),
+		   ('p','Role','UserAffiliation','SecurityContext','CreatePrivilege', 'Create'),
+		   ('p','Role','UserAffiliation','SecurityContext','UpdatePrivilege', 'Update'),
+		   ('p','Role2','UserAffiliation2','SecurityContext2','DeletePrivilege', 'Delete'),
+ 		   ('p','Role2','UserAffiliation2','SecurityContext2','UpdatePrivilege2','Update')
+GO
+
+INSERT INTO [dbo].[CasbinRule]
+           ([PType]
+           ,[V0]
+           ,[V1]
+           ,[V2])
+     VALUES
+           ('g','User1','Role','UserAffiliation'),
+		   ('g','User2','Role2','UserAffiliation2'),
+           ('g','User1','Role2','UserAffiliation2')
+GO
+
+USE [CasbinACLDB]
+GO
+
+INSERT INTO [dbo].[Contacts]
+           ([Name]
+           ,[Address]
+           ,[City]
+           ,[State]
+           ,[Zip]
+           ,[Email])
+     VALUES
+           ('User1','Address1','City1','State1','Zipcode1','user1@example.com'),
+		   ('User2','Address2','City2','State2','Zipcode2','user2@example.com')
+GO
+
+
+
+CREATE SCHEMA Security;  
+GO  
+  
+CREATE FUNCTION Security.tvf_securitypredicate(@Name AS nvarchar(50))  
+    RETURNS TABLE  
+WITH SCHEMABINDING  
+AS  
+    RETURN SELECT 1 AS tvf_securitypredicate_result
+WHERE @Name = USER_NAME()  
+GO
+
+CREATE SECURITY POLICY ContactsFilter  
+ADD FILTER PREDICATE Security.tvf_securitypredicate(Name)
+ON dbo.Contacts,
+Add BLOCK PREDICATE Security.tvf_securitypredicate(Name)
+ON dbo.Contacts After Insert,
+Add BLOCK PREDICATE Security.tvf_securitypredicate(Name)
+ON dbo.Contacts Before Delete,
+Add BLOCK PREDICATE Security.tvf_securitypredicate(Name)
+ON dbo.Contacts Before Update,
+Add BLOCK PREDICATE Security.tvf_securitypredicate(Name)
+ON dbo.Contacts After Update
+WITH (STATE = ON);  
+GO
+
+
+
+EXECUTE AS USER = 'User1';  
+SELECT * FROM dbo.Contacts;
+REVERT;  
+  
+EXECUTE AS USER = 'User1';  
+Insert into dbo.Contacts (Name, Address, City, State, Zip, Email)
+Values('User2','addressi','cityi','statei','zipcodei','user1@example.com')
+REVERT;  
+
+EXECUTE AS USER = 'User1';
+DELETE FROM dbo.Contacts 
+WHERE ContactId = 33 
+REVERT
+
+
+  
+EXECUTE AS USER = 'User1';
+UPDATE Contacts
+SET Zip = 'Zip82'
+WHERE ContactId = 79;
+REVERT
+
+DROP USER User1;
+DROP USER User2;
+
+DROP SECURITY POLICY ContactsFilter;
+DROP FUNCTION Security.tvf_securitypredicate;
+DROP SCHEMA Security;
+
+
